@@ -4,9 +4,14 @@ use chrono::{Duration, Utc};
 use jsonwebtoken::{self, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
+
+
 // Token lifetime and Secret key are hardcoded for clarity
 const JWT_EXPIRATION_HOURS: i64 = 24;
-const SECRET: &str = "asdjfhjl1341k3jhlkjdsf934f8hos8fho3";
+
+lazy_static! {
+    pub static ref SECRET: String = std::env::var("jwt_token").unwrap();
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Claims {
@@ -38,4 +43,10 @@ pub(crate) fn decode_jwt(token: &str) -> Result<Claims, Error> {
     jsonwebtoken::decode::<Claims>(token, &decoding_key, &Validation::default())
         .map(|data| data.claims)
         .map_err(|e| ErrorUnauthorized(e.to_string()))
+}
+
+
+#[derive(Serialize, Deserialize)]
+pub struct TokenContainer {
+    pub token: String,
 }

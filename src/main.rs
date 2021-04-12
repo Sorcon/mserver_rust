@@ -1,6 +1,7 @@
 use actix_web::dev::ServiceRequest;
 use actix_web::middleware::Logger;
 use actix_web::*;
+use dotenv::dotenv;
 
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use actix_web_httpauth::middleware::HttpAuthentication;
@@ -9,11 +10,14 @@ use actix_web_grants::proc_macro::{has_any_role, has_permissions};
 // Used for integration with `actix-web-httpauth`
 use actix_web_grants::permissions::AttachPermissions;
 
-use crate::auth::claims::Claims;
+use crate::auth::claims::{Claims, TokenContainer};
 use crate::utils::merror::MServerError;
-use crate::models::user::{User, UserRole, init_user};
+use crate::models::user::{User, UserRole, UserPermissionsRequest, init_user};
+
+#[macro_use]
+extern crate lazy_static;
+
 use env_logger;
-use serde_derive::{Deserialize, Serialize};
 mod auth;
 mod utils;
 mod models;
@@ -37,8 +41,8 @@ async fn validator(req: ServiceRequest, credentials: BearerAuth) -> Result<Servi
     Ok(req)
 }
 
-#[post("/token")]
-pub async fn create_token(
+#[post("/login")]
+pub async fn login(
     info: web::Json<UserPermissionsRequest>,
 ) -> Result<web::Json<TokenContainer>, MServerError> {
     let user_info = info.into_inner();
@@ -52,22 +56,8 @@ pub async fn create_token(
     }
 }
 
-#[derive(Deserialize)]
-pub struct UserPermissionsRequest {
-    pub username: String,
-    pub permissions: Vec<String>,
-    pub password: String,
-}
 
-#[derive(Serialize, Deserialize)]
-pub struct TokenContainer {
-    token: String,
-}
-
-
-
-
-
+#[has_any_role("ADMIN", "MANAGER")]
 #[get("/user")]
 async fn user() -> Result<web::Json<User>> {
     Ok(web::Json(
@@ -77,6 +67,8 @@ async fn user() -> Result<web::Json<User>> {
     ))
 }
 
+
+#[has_any_role("ADMIN", "MANAGER")]
 #[post("/user")]
 async fn set_user(new_user: web::Json<User>) -> Result<web::Json<User>> {
     Ok(new_user)
@@ -84,14 +76,20 @@ async fn set_user(new_user: web::Json<User>) -> Result<web::Json<User>> {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenv().ok();
     std::env::set_var("RUST_LOG", "actix_web=info");
     env_logger::init();
 
     HttpServer::new(|| {
         let auth = HttpAuthentication::bearer(validator);
         App::new()
-            .service(create_token)
-            .service(web::scope("api").wrap(auth).service(user).service(set_user))
+            .service(login)
+            .service(
+                web::scope("api")
+                .wrap(auth)
+                .service(user)
+                .service(set_user)
+            )
             .wrap(Logger::default())
     })
     .bind("192.168.20.122:8080")?

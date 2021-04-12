@@ -12,9 +12,16 @@ pub struct User {
     pub md5password: String,
 }
 
+#[derive(Deserialize)]
+pub struct UserPermissionsRequest {
+    pub username: String,
+    pub permissions: Vec<String>,
+    pub password: String,
+}
+
 impl User {
     pub async fn find_by_name(name: &str) -> User {
-        init_user("login", "email", "password", UserRole::User).await.unwrap()
+        init_user(name.into(), "email", "password", UserRole::User).await.unwrap()
     }
 }
 
